@@ -2,6 +2,30 @@ import PySimpleGUI as sg
 import pandas as pd
 import os
 from datetime import datetime, timedelta
+import shutil
+
+# データ処理関数
+def read_and_filter_data(file_path):
+    df = pd.read_csv(file_path)
+    df['日付'] = pd.to_datetime(df['日付'])
+    one_week_ago = pd.Timestamp(datetime.now() - timedelta(days=7))
+    return df[df['日付'] > one_week_ago]
+
+# 集計関数
+def aggregate_data(df):
+    # 商品別集計
+    product_summary = df.groupby('商品ID').agg({
+        '販売数': 'sum',
+        '単価': 'mean'
+    }).reset_index()
+
+    # 日別集計
+    daily_summary = df.groupby('日付').agg({
+        '販売数': 'sum',
+        '単価': 'mean'
+    }).reset_index()
+
+    return product_summary, daily_summary
 
 # GUIレイアウトの設定
 layout = [
@@ -21,106 +45,53 @@ while True:
     if event == "レポート生成":
         # データバリデーションとエラーハンドリング
         try:
-            df = pd.read_csv(values[0])  # ここでバリデーションロジックを追加
+            df_filtered = read_and_filter_data(values[0])
         except Exception as e:
             window['error_message'].update(f"エラー: {e}")
             continue
 
         # データ処理
         try:
-            export_folder = values[1]  # ユーザーが選択したフォルダ
+            export_folder = values[1]
             if not export_folder:
                 raise Exception("エクスポート先フォルダが指定されていません")
-            
-            # 過去1週間のデータにフィルタリング
-            one_week_ago = pd.Timestamp(datetime.now() - timedelta(days=7))
-            df['日付'] = pd.to_datetime(df['日付'])
-            df_filtered = df[df['日付'] > one_week_ago]
 
-            # 商品別集計
-            product_summary = df_filtered.groupby('商品ID').agg({
-                '販売数': 'sum',
-                '単価': 'mean'
-            }).reset_index()
+            product_summary, daily_summary = aggregate_data(df_filtered)
 
-            # 日別集計
-            daily_summary = df_filtered.groupby('日付').agg({
-                '販売数': 'sum',
-                '単価': 'mean'
-            }).reset_index()
-
-            # カテゴリ別集計
-            df_filtered['カテゴリ'] = df_filtered['商品ID'].apply(lambda x: '食品' if x <= 1005 else '家電')
-            category_summary = df_filtered.groupby('カテゴリ').agg({
-                '販売数': 'sum',
-                '単価': 'mean'
-            }).reset_index()
-
-            # レポート生成
             report_file = os.path.join(export_folder, "週次販売レポート.xlsx")
             with pd.ExcelWriter(report_file) as writer:
                 product_summary.to_excel(writer, sheet_name='商品別集計', index=False)
                 daily_summary.to_excel(writer, sheet_name='日別集計', index=False)
-                category_summary.to_excel(writer, sheet_name='カテゴリ別集計', index=False)
-            
-            window['progressbar'].update(100)  # 100% 完了
+
+            window['progressbar'].update(100)
         except Exception as e:
             window['error_message'].update(f"エラー: {e}")
             continue
 
     elif event == "集計結果確認":
         try:
-            # データ読み込み
-            df = pd.read_csv(values[0])
-            df['日付'] = pd.to_datetime(df['日付'])  # 日付をdatetime型に変換
-
-            # 過去1週間のデータにフィルタリング
-            one_week_ago = pd.Timestamp(datetime.now() - timedelta(days=7))
-            df_filtered = df[df['日付'] > one_week_ago]
-
-            # 商品別集計
-            product_summary = df_filtered.groupby('商品ID').agg({
-                '販売数': 'sum',
-                '単価': 'mean'
-            }).reset_index()
-
-            # 日別集計
-            daily_summary = df_filtered.groupby('日付').agg({
-                '販売数': 'sum',
-                '単価': 'mean'
-            }).reset_index()
-
-            # 商品カテゴリ別集計
-            df_filtered['カテゴリ'] = df_filtered['商品ID'].apply(lambda x: '食品' if x <= 1005 else '家電')
-            category_summary = df_filtered.groupby('カテゴリ').agg({
-                '販売数': 'sum',
-                '単価': 'mean'
-            }).reset_index()
-
-            # 新しいウィンドウで集計結果を表示
+            # データバリデーションとエラーハンドリング
+            df_filtered = read_and_filter_data(values[0])
+            # データ処理
+            product_summary, daily_summary = aggregate_data(df_filtered)
+            # 集計結果の表示
             layout_summary = [
                 [sg.Text("商品別集計")],
                 [sg.Table(values=product_summary.values.tolist(), headings=list(product_summary.columns), display_row_numbers=False)],
                 [sg.Text("日別集計")],
                 [sg.Table(values=daily_summary.values.tolist(), headings=list(daily_summary.columns), display_row_numbers=False)],
-                [sg.Text("カテゴリ別集計")],
-                [sg.Table(values=category_summary.values.tolist(), headings=list(category_summary.columns), display_row_numbers=False)],
-                [sg.Button("出力確認")]
+                [sg.Button("閉じる")]
             ]
+
             window_summary = sg.Window("集計結果", layout_summary)
 
+            # 集計結果のウィンドウを閉じるまでループ
             while True:
                 event_summary, values_summary = window_summary.read()
-
-                if event_summary == "出力確認":
-                    # レポート出力処理
-                    report_file = os.path.join(values[1], "週次販売レポート.xlsx")
-                    with pd.ExcelWriter(report_file) as writer:
-                        product_summary.to_excel(writer, sheet_name='商品別集計', index=False)
-                        daily_summary.to_excel(writer, sheet_name='日別集計', index=False)
-                        category_summary.to_excel(writer, sheet_name='カテゴリ別集計', index=False)
+                if event_summary in ("閉じる", None):
                     window_summary.close()
                     break
+
         except Exception as e:
             window['error_message'].update(f"エラー: {e}")
             continue
@@ -128,13 +99,18 @@ while True:
     if event == "レポートダウンロード":
         # レポートをダウンロードするロジック
         try:
-            # レポートが存在するか確認
             if not os.path.exists(report_file):
                 raise Exception("レポートが生成されていません")
             
-            # レポートのダウンロード
-            # レポートのダウンロード処理
-            # ダウンロードが完了したら、レポートを削除
+            # ユーザーが保存先を選ぶダイアログを表示
+            save_path = sg.popup_get_file('保存先を選んでください', save_as=True)
+            if not save_path:
+                raise Exception("保存先が指定されていません")
+
+            # ファイルを保存先にコピー
+            shutil.copy(report_file, save_path)
+
+            # オリジナルのレポートファイルを削除
             os.remove(report_file)
         except Exception as e:
             window['error_message'].update(f"エラー: {e}")
