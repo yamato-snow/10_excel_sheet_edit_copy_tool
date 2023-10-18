@@ -1,3 +1,4 @@
+import re
 import PySimpleGUI as sg
 import csv
 
@@ -27,7 +28,7 @@ layout = [
     [sg.Text('商品名'), sg.Input(key='-PRODUCT-', size=(30, 1))],
     [sg.Text('数量'), sg.Input(key='-QUANTITY-', size=(10, 1))],
     [sg.Text('単位'), sg.Input(key='-UNIT-', size=(10, 1))],
-    [sg.Button('追加'), sg.Button('削除')],
+    [sg.Button('追加'), sg.Button('削除'), sg.Button('完全削除')],
     [sg.Table(values=[[k, v['quantity'], v['unit']] for k, v in inventory.items()],
               headings=['商品名', '数量', '単位'],
               display_row_numbers=False,
@@ -53,28 +54,49 @@ while True:
     # 入力された商品名と数量、単位を取得
     product = values['-PRODUCT-']
     if product:
+        # 数量が数字でない場合は0にする
         quantity = int(values['-QUANTITY-']) if values['-QUANTITY-'].isdigit() else 0
+        # 単位が入力されていない場合は空文字にする
         unit = values['-UNIT-']
+
+        # 商品名に数字や記号が含まれている場合はエラーを表示
+        if re.search(r'[0-9!@#$%^&*(),.?":{}|<>]', unit):
+            sg.popup_error('単位に数字や記号は使用できません')
+            continue
 
         # 「追加」ボタンが押された場合の処理
         if event == '追加':
+            # 単位が入力されていない場合はエラーを表示
+            if not unit:
+                sg.popup_error('単位を入力してください')
+                continue
             if product in inventory:
+                # 既に存在する商品の場合は数量を加算
                 inventory[product]['quantity'] += quantity
             else:
+                # 新しい商品の場合は辞書に追加
                 inventory[product] = {'quantity': quantity, 'unit': unit}
 
         # 「削除」ボタンが押された場合の処理
         if event == '削除':
             if product in inventory:
                 if inventory[product]['quantity'] >= quantity:
+                    # 数量を減算
                     inventory[product]['quantity'] -= quantity
                 else:
                     sg.popup_error('在庫が足りません')
+        # 「完全削除」ボタンが押された場合の処理
+        if event == '完全削除':
+            if product in inventory:
+                # 商品を削除
+                del inventory[product]
+            else:
+                sg.popup_error('指定された商品は存在しません')                    
 
         # CSVファイルを更新
         save_data(inventory)
-    # 在庫リストを更新
-    window['-INVENTORY-'].update(values=[[k, v['quantity'], v['unit']] for k, v in inventory.items()])
+        # 在庫リストを更新
+        window['-INVENTORY-'].update(values=[[k, v['quantity'], v['unit']] for k, v in inventory.items()])
 
 # ウィンドウを閉じる
 window.close()
