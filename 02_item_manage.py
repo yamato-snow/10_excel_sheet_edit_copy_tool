@@ -24,16 +24,23 @@ inventory = load_data()
 
 # GUIのレイアウト設定
 layout = [
-    [sg.Text('商品名'), sg.Input(key='-PRODUCT-')],
-    [sg.Text('数量'), sg.Input(key='-QUANTITY-')],
-    [sg.Text('単位'), sg.Input(key='-UNIT-')],
+    [sg.Text('商品名'), sg.Input(key='-PRODUCT-', size=(30, 1))],
+    [sg.Text('数量'), sg.Input(key='-QUANTITY-', size=(10, 1))],
+    [sg.Text('単位'), sg.Input(key='-UNIT-', size=(10, 1))],
     [sg.Button('追加'), sg.Button('削除')],
-    [sg.Listbox(values=list(inventory.keys()), size=(50, 10), key='-INVENTORY-')],
+    [sg.Table(values=[[k, v['quantity'], v['unit']] for k, v in inventory.items()],
+              headings=['商品名', '数量', '単位'],
+              display_row_numbers=False,
+              auto_size_columns=False,
+              col_widths=[60, 20, 10],
+              justification='left',
+              num_rows=min(25, len(inventory)),
+              key='-INVENTORY-')],
     [sg.Button('終了')]
 ]
 
 # ウィンドウを作成
-window = sg.Window('在庫管理', layout)
+window = sg.Window('在庫管理', layout, size=(900, 600))
 
 # イベントループ
 while True:
@@ -66,8 +73,8 @@ while True:
 
         # CSVファイルを更新
         save_data(inventory)
-        # 在庫リストを更新
-        window['-INVENTORY-'].update(list(inventory.keys()))
+    # 在庫リストを更新
+    window['-INVENTORY-'].update(values=[[k, v['quantity'], v['unit']] for k, v in inventory.items()])
 
 # ウィンドウを閉じる
 window.close()
