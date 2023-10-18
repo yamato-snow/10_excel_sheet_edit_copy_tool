@@ -35,7 +35,8 @@ layout = [
               auto_size_columns=False,
               col_widths=[60, 20, 10],
               justification='left',
-              num_rows=min(25, len(inventory)),
+              # 最大20行まで表示
+              num_rows=20,
               key='-INVENTORY-')],
     [sg.Button('終了')]
 ]
@@ -53,16 +54,37 @@ while True:
 
     # 入力された商品名と数量、単位を取得
     product = values['-PRODUCT-']
-    if product:
-        # 数量が数字でない場合は0にする
-        quantity = int(values['-QUANTITY-']) if values['-QUANTITY-'].isdigit() else 0
+
+    # 商品名が入力されていない場合はエラーを表示
+    if not product:
+        sg.popup_error('商品名を入力してください')
+        continue
+
+    else:
+        # 商品名に数字や記号が含まれている場合又は値がない場合エラーを表示
+        if re.search(r'[0-9!"#$%&\'()*+,-./:;<=>?@[\]^_`{|}~]', product) or product == '':
+            sg.popup_error('商品名に数字や記号は使用できません')
+            continue
+
+        # 「完全削除」ボタンが押された場合の処理
+        if event == '完全削除':
+            # 下記の処理をスキップ
+            pass
+        else:
+            # 数量が数字でない場合エラー文を表示
+            try:
+                quantity = int(values['-QUANTITY-'])
+            except ValueError:
+                sg.popup_error('数量には数字を入力してください')
+                continue
+
+            # 数量が0以下の場合エラー文を表示
+            if quantity <= 0:
+                sg.popup_error('数量は1以上を指定してください')
+                continue
+
         # 単位が入力されていない場合は空文字にする
         unit = values['-UNIT-']
-
-        # 商品名に数字や記号が含まれている場合はエラーを表示
-        if re.search(r'[0-9!@#$%^&*(),.?":{}|<>]', unit):
-            sg.popup_error('単位に数字や記号は使用できません')
-            continue
 
         # 「追加」ボタンが押された場合の処理
         if event == '追加':
@@ -70,6 +92,7 @@ while True:
             if not unit:
                 sg.popup_error('単位を入力してください')
                 continue
+            # 商品が存在しない場合は辞書に追加
             if product in inventory:
                 # 既に存在する商品の場合は数量を加算
                 inventory[product]['quantity'] += quantity
@@ -79,7 +102,13 @@ while True:
 
         # 「削除」ボタンが押された場合の処理
         if event == '削除':
+            # 商品が存在しない場合はエラーを表示
+            if product not in inventory:
+                sg.popup_error('指定された商品は存在しません')
+                continue
+            # 商品が存在する場合は数量を減算
             if product in inventory:
+                # 数量が0以下にならないようにする
                 if inventory[product]['quantity'] >= quantity:
                     # 数量を減算
                     inventory[product]['quantity'] -= quantity
@@ -87,11 +116,14 @@ while True:
                     sg.popup_error('在庫が足りません')
         # 「完全削除」ボタンが押された場合の処理
         if event == '完全削除':
-            if product in inventory:
-                # 商品を削除
-                del inventory[product]
-            else:
-                sg.popup_error('指定された商品は存在しません')                    
+            # 確認メッセージを表示
+            if sg.popup_yes_no('商品を完全に削除してもよろしいですか？') == 'Yes':
+                # 商品が存在しない場合はエラーを表示
+                if product in inventory:
+                    # 商品を削除
+                    del inventory[product]
+                else:
+                    sg.popup_error('指定された商品は存在しません')                    
 
         # CSVファイルを更新
         save_data(inventory)
